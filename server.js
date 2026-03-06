@@ -1,26 +1,29 @@
 'use strict';
 
 /**
- * Bolita Tennis API (Node + Express + Playwright) — Render-ready
+ * Bolita Tennis API (Node + Express + Playwright) — Render-ready (sin Docker)
  *
- * IMPORTANTE PARA RENDER:
- * Build Command:
- *   npm install && PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium
- * Start Command:
- *   npm start
+ * Render settings recomendados:
+ * - Node: 20.x
+ * - Build Command:
+ *     npm install && PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium
+ * - Start Command:
+ *     npm start
  *
- * Env var recomendada en Render:
- *   PLAYWRIGHT_BROWSERS_PATH=0
- *
- * Opcional:
- *   SCRAPE_URL=https://www.flashscore.es/tenis/
- *   CACHE_TTL_MS=15000
+ * (Opcional) Env vars:
+ * - PLAYWRIGHT_BROWSERS_PATH=0
+ * - SCRAPE_URL=https://www.flashscore.es/tenis/
+ * - CACHE_TTL_MS=15000
  */
 
-'use strict';
-
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+
+// 🔥 CLAVE: fuerza modo hermético ANTES de cargar Playwright.
+// Así los browsers viven en node_modules/playwright-core/.local-browsers y no en ~/.cache. [1](https://mcr.microsoft.com/en-us/product/playwright/about)[2](https://www.bstefanski.com/blog/playwright-missing-dependencies)
 process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '0';
+
 const { chromium } = require('playwright');
 
 const app = express();
@@ -32,7 +35,7 @@ const SCRAPE_URLS = [
   'https://www.flashscore.mobi/tennis/'
 ];
 
-// Cache para evitar abrir Chromium en cada request (muy importante en Render Free)
+// Cache para evitar abrir Chromium en cada request
 const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 15000);
 let _cache = { ts: 0, data: null };
 let _inFlight = null;
@@ -59,16 +62,19 @@ async function launchPage() {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
+
   const context = await browser.newContext({
     userAgent:
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 720 }
   });
+
   const page = await context.newPage();
   return { browser, context, page };
 }
 
 async function bestEffortHandleCookies(page) {
+  // Best-effort: puede variar por país/idioma
   const candidates = [
     'button:has-text("Aceptar")',
     'button:has-text("Acepto")',
@@ -78,6 +84,7 @@ async function bestEffortHandleCookies(page) {
     'button:has-text("Accept")',
     'button:has-text("Accept all")'
   ];
+
   for (const sel of candidates) {
     try {
       const btn = await page.$(sel);
@@ -91,6 +98,7 @@ async function bestEffortHandleCookies(page) {
 }
 
 async function bestEffortScroll(page) {
+  // Lazy-load
   for (let i = 0; i < 4; i++) {
     try {
       await page.mouse.wheel(0, 1400);
@@ -100,7 +108,7 @@ async function bestEffortScroll(page) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Debug endpoints
+// Debug endpoints (te ayudan a ver qué está renderizando)
 // ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({
@@ -114,6 +122,7 @@ app.get('/health', (req, res) => {
 app.get('/debug/pw', (req, res) => {
   const cwd = process.cwd();
   const localBrowsers = path.join(cwd, 'node_modules', 'playwright-core', '.local-browsers');
+
   res.json({
     ok: true,
     cwd,
@@ -125,7 +134,7 @@ app.get('/debug/pw', (req, res) => {
   });
 });
 
-// Screenshot base64 + URL final + contadores (para ver qué está renderizando)
+// Screenshot base64 + URL final + contadores (para ver cookies/bloqueos/DOM)
 app.get('/debug/snap', async (req, res) => {
   let browser = null;
   try {
@@ -205,11 +214,11 @@ async function scrapeFromUrl(url) {
     await bestEffortHandleCookies(page);
     await bestEffortScroll(page);
 
-    // Espera a algo parecido a “match”
+    // Espera a algo "match" (flexible)
     await page.waitForSelector('[class*="match"]', { timeout: 12000 }).catch(() => {});
 
     const data = await page.evaluate(() => {
-      // Selecciona matches de forma flexible
+      // Matches de forma flexible
       const nodes = Array.from(document.querySelectorAll('.event__match, [class*="event__match"]'));
       const out = [];
 
@@ -224,8 +233,7 @@ async function scrapeFromUrl(url) {
         let tournament = '';
         let prev = node.previousElementSibling;
         while (prev) {
-          const cls = prev.className || '';
-          if (String(cls).includes('event__header')) {
+          if (String(prev.className || '').includes('event__header')) {
             tournament = prev.querySelector('.event__title--name')?.textContent?.trim() || '';
             break;
           }
@@ -335,4 +343,3 @@ app.listen(PORT, () => {
   console.log(`PLAYWRIGHT_BROWSERS_PATH=${process.env.PLAYWRIGHT_BROWSERS_PATH}`);
   console.log(`SCRAPE_URLS=${JSON.stringify(SCRAPE_URLS)}`);
 });
-
