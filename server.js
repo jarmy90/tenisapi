@@ -17,14 +17,10 @@
  *   CACHE_TTL_MS=15000
  */
 
+'use strict';
+
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
-
-// 🔥 CLAVE: forzar instalación "hermética" (browsers dentro de node_modules)
-// Debe ir ANTES de cargar Playwright.
 process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || '0';
-
 const { chromium } = require('playwright');
 
 const app = express();
@@ -339,3 +335,4 @@ app.listen(PORT, () => {
   console.log(`PLAYWRIGHT_BROWSERS_PATH=${process.env.PLAYWRIGHT_BROWSERS_PATH}`);
   console.log(`SCRAPE_URLS=${JSON.stringify(SCRAPE_URLS)}`);
 });
+
