@@ -27,7 +27,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // URL a scrapear (puedes cambiarla en Render env var SCRAPE_URL si quieres)
-const SCRAPE_URL = process.env.SCRAPE_URL || 'https://www.flashscore.es/tennis/';
+const SCRAPE_URL = process.env.SCRAPE_URL
 
 // Cache para no lanzar Chromium continuamente (Render Free lo agradece)
 const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 15000); // 15s
@@ -592,4 +592,5 @@ app.listen(PORT, () => {
   console.log(`Prueba local: http://localhost:${PORT}/api/tennis/live`);
   console.log(`PLAYWRIGHT_BROWSERS_PATH=${process.env.PLAYWRIGHT_BROWSERS_PATH}`);
 });
+
 
